@@ -2,6 +2,7 @@
 
   <PropertyGroup>
 	  <Version>0.0.1</Version>
+	  <PackageId>CSM.DevKit</PackageId>
 	  <Authors>Renato Urrea</Authors>
 	  <Company>Cosmos (CSM)</Company>
 	  <PackAsTool>true</PackAsTool>
