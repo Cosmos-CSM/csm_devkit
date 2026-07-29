@@ -9,4 +9,4 @@ It's free to open tickets and submit PR's to improve or request features.
 
 To install the CMDLine tools properly run:
 
-dotnet tool install --global csmdk --add-source https://nuget.pkg.github.com/Cosmos-CSM/index.json
+dotnet tool install --global CSM.DevKit
