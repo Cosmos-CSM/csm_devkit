@@ -1,32 +1,31 @@
 ﻿
 using System.CommandLine;
 
-internal class Program
-{
-    private static int Main(string[] args)
-    {
-        Command dbCommands = new(
-                "db",
-                "Database related commands"
-            );
+using CSM_DevKit.Commands;
 
-        dbCommands.SetAction(
-                (parseResult) =>
-                {
-                    Console.WriteLine("Welcome to database related commands");
-                    return 0;
+using CSM_Foundation_Core.Core.Utils;
+
+internal class Program {
+    private static int Main(string[] args) {
+
+        try {
+            RootCommand rootCommand = new("csmdk") {
+                Subcommands = {
+                    new DatabaseCommand()
                 }
-            );
-        
-        
-        RootCommand rootCommand = new("csmdk")
-        {
-            Subcommands = {
-                    dbCommands
-                }
-        };
+            };
 
+            return rootCommand
+                .Parse(args)
+                .Invoke(
+                    new InvocationConfiguration {
+                        EnableDefaultExceptionHandler = false,
+                    }
+                );
+        } catch (Exception x) {
+            ConsoleUtils.Error(x.Message);
 
-        return rootCommand.Parse(args).Invoke();
+            return -1;
+        }
     }
 }

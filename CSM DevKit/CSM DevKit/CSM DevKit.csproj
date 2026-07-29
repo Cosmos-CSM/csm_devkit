@@ -1,6 +1,16 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+	  <Version>0.0.1</Version>
+	  <Authors>Renato Urrea</Authors>
+	  <Company>Cosmos (CSM)</Company>
+	  <PackAsTool>true</PackAsTool>
+	  <ToolCommandName>csmdk</ToolCommandName>
+	  <PackageReleaseNotes></PackageReleaseNotes>
+	  <PackageReadmeFile>README.md</PackageReadmeFile>
+	  <PackageReleaseNotes>$(MSBuildThisFileDirectory)CHANGELOG.md</PackageReleaseNotes>
+	  <RepositoryUrl>https://github.com/Cosmos-CSM/csm_devkit</RepositoryUrl>
+	  
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>CSM_DevKit</RootNamespace>
@@ -9,7 +19,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CSM.Database.Core" Version="7.0.0" />
+    <PackageReference Include="CSM.Foundation.Core" Version="4.0.0" />
+    <PackageReference Include="Spectre.Console" Version="0.57.2" />
     <PackageReference Include="System.CommandLine" Version="2.0.10" />
   </ItemGroup>
+
+	<ItemGroup>
+		<None Include="README.md" Pack="true" PackagePath="" />
+		<None Include="CHANGELOG.md" Pack="true" PackagePath="" />
+	</ItemGroup>
 
 </Project>
