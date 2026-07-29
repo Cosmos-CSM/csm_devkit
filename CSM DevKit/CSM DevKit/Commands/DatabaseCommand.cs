@@ -33,6 +33,16 @@ public partial class DatabaseCommand : Command {
             );
 
     /// <summary>
+    ///     Defines the desired predefined database to use.
+    /// </summary>
+    readonly Option<string?> _databasePreferenceOption = new(
+            "--database",
+            [
+                    "-d"
+                ]
+        );
+
+    /// <summary>
     ///     Overrides the project path to calculate database.
     /// </summary>
     readonly Option<string> _projectPathOption = new(
@@ -54,9 +64,11 @@ public partial class DatabaseCommand : Command {
         // --> Adding configurations
         _onlineOption.Description = "Whether the database packages are detected online";
         _projectPathOption.Description = "Overrides the project path to detect databases to migrate, otherwise uses where the command is invoked";
+        _databasePreferenceOption.Description = "Predefines a database to migrate if available in the project references, the name must be defined as the package name. (ex. CSM.Security.Database)";
 
         Add(_onlineOption);
         Add(_projectPathOption);
+        Add(_databasePreferenceOption);
 
         SetAction(OnAction);
     }
@@ -70,9 +82,9 @@ public partial class DatabaseCommand : Command {
     /// <exception cref="SystemError"></exception>
     void OnAction(ParseResult context) {
         bool isSrcOnline = context.GetValue(_onlineOption);
+        string? preferedDatabase = context.GetValue(_databasePreferenceOption);
 
         // --> Detecting databases
-
         CSharpProjectPackageInfo[] dbPackages = [];
         AnsiConsole.Status().Spinner(
                 Spinner.Known.Aesthetic
@@ -93,7 +105,9 @@ public partial class DatabaseCommand : Command {
             );
 
         /// --> Selecting database to migrate.
-        CSharpProjectPackageInfo choosenDb = AnsiConsole.Prompt(
+        CSharpProjectPackageInfo choosenDb;
+        if (string.IsNullOrWhiteSpace(preferedDatabase)) {
+            choosenDb = AnsiConsole.Prompt(
                 new SelectionPrompt<CSharpProjectPackageInfo>()
                     .Title("Choose your [green]Database[/]: ")
                     .PageSize(10)
@@ -108,6 +122,12 @@ public partial class DatabaseCommand : Command {
                             )
                     )
             );
+        } else {
+            choosenDb = dbPackages.FirstOrDefault(
+                    dbPackage => dbPackage.Name.Equals(preferedDatabase?.ToLower(), StringComparison.CurrentCultureIgnoreCase)
+                )
+                ?? throw new SystemError($"Prefered database ({preferedDatabase}) is not referenced in project");
+        }
 
         /// Load the assembly and get the DbContext class to migrate.
         DbContext databaseContext = choosenDb.GetContext();
