@@ -1,4 +1,4 @@
-name: Publish [CSM Database Core]
+name: Publish [CSM DevKit]
 
 on:
   # 1) Manual trigger in the Actions tab
