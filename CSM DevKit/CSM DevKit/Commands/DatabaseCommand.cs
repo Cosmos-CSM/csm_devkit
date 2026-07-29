@@ -52,6 +52,9 @@ public partial class DatabaseCommand : Command {
         ) {
 
         // --> Adding configurations
+        _onlineOption.Description = "Whether the database packages are detected online";
+        _projectPathOption.Description = "Overrides the project path to detect databases to migrate, otherwise uses where the command is invoked";
+
         Add(_onlineOption);
         Add(_projectPathOption);
 

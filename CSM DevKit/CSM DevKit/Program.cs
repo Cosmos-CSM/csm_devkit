@@ -9,7 +9,7 @@ internal class Program {
     private static int Main(string[] args) {
 
         try {
-            RootCommand rootCommand = new("csmdk") {
+            RootCommand rootCommand = new("Provides utilities methods for CSM developers and maintainers") {
                 Subcommands = {
                     new DatabaseCommand()
                 }
