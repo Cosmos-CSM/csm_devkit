@@ -1,0 +1,71 @@
+name: Publish [CSM Database Core]
+
+on:
+  # 1) Manual trigger in the Actions tab
+  workflow_dispatch:
+  
+  # 2) Push to main, but only if files under the folder change
+  push:
+    branches:
+      - main
+    paths:
+      - 'CSM DevKit/CSM DevKit/**'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  package_publish:
+    runs-on: ubuntu-latest
+
+    env:
+      CS_PROJECT_PATH: 'CSM DevKit/CSM DevKit/CSM DevKit.csproj'
+
+    steps:
+      - name: 🔄 Checkout repo
+        uses: actions/checkout@v3
+
+      - name: 🔑 Configure NuGet to use GitHub Packages
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.PUBLISH_PAT }}
+        run: |
+          dotnet nuget add source \
+            "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            --name "github" \
+            --username ${{ github.actor }} \
+            --password "$NUGET_AUTH_TOKEN" \
+            --store-password-in-clear-text
+
+      - name: ⚙️ Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: 🔧 Restore & Build
+        run: |
+          dotnet restore "$CS_PROJECT_PATH"
+          dotnet build   "$CS_PROJECT_PATH" \
+            --configuration Release
+
+      - name: 📦 Pack NuGet project
+        run: |
+          # ensure output folder exists at the repo root
+          mkdir -p "$GITHUB_WORKSPACE/nupkgs"
+          dotnet pack "$CS_PROJECT_PATH" \
+            --configuration Release \
+            --output "$GITHUB_WORKSPACE/nupkgs"
+
+
+      - name: 📋 Verify generated packages
+        run: |
+          echo "Contents of nupkgs folder:"
+          ls -la "$GITHUB_WORKSPACE/nupkgs"
+
+
+      - name: 📤 Push to GitHub Packages
+        run: |
+          dotnet nuget push "$GITHUB_WORKSPACE/nupkgs/*.nupkg" \
+            --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            --api-key "${{ secrets.PUBLISH_PAT }}" \
+            --skip-duplicate
