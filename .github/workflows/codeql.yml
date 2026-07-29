@@ -1,0 +1,37 @@
+name: CodeQL
+
+on:
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: 🔑 Configure NuGet to use GitHub Packages
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.PUBLISH_PAT }}
+        run: |
+          dotnet nuget add source \
+            "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            --name "github" \
+            --username ${{ github.actor }} \
+            --password "$NUGET_AUTH_TOKEN" \
+            --store-password-in-clear-text
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
