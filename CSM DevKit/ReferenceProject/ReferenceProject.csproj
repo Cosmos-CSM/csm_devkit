@@ -6,9 +6,4 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="CSM.Database.Core" Version="7.0.0" />
-    <PackageReference Include="CSM.Sandbox.Database.Core" Version="1.0.0" />
-  </ItemGroup>
-
 </Project>

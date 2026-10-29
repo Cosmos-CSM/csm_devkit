@@ -1,18 +1,6 @@
 ﻿using System.CommandLine;
-using System.Diagnostics;
-using System.Text.RegularExpressions;
-using System.Xml.Linq;
 
-using CSM_Database_Core.Abstractions.Interfaces;
-
-using CSM_DevKit.Core.Models;
-
-using CSM_Foundation_Core.Core.Errors;
-using CSM_Foundation_Core.Core.Utils;
-
-using Microsoft.EntityFrameworkCore;
-
-using Spectre.Console;
+using CSM_DevKit.Options;
 
 namespace CSM_DevKit.Commands;
 
@@ -20,37 +8,6 @@ namespace CSM_DevKit.Commands;
 ///     Represents commands for Database interactions.
 /// </summary>
 public partial class DatabaseCommand : Command {
-
-
-    /// <summary>
-    ///     Defines if the assembly loading is online.
-    /// </summary>
-    readonly Option<bool> _onlineOption = new(
-                "--online",
-                [
-                        "-o"
-                    ]
-            );
-
-    /// <summary>
-    ///     Defines the desired predefined database to use.
-    /// </summary>
-    readonly Option<string?> _databasePreferenceOption = new(
-            "--database",
-            [
-                    "-d"
-                ]
-        );
-
-    /// <summary>
-    ///     Overrides the project path to calculate database.
-    /// </summary>
-    readonly Option<string> _projectPathOption = new(
-            "--projectPath",
-            [
-                    "-p"
-                ]
-        );
 
     /// <summary>
     ///     Creates a new instancee
@@ -61,188 +18,11 @@ public partial class DatabaseCommand : Command {
             "Database update related commands"
         ) {
 
-        // --> Adding configurations
-        _onlineOption.Description = "Whether the database packages are detected online";
-        _projectPathOption.Description = "Overrides the project path to detect databases to migrate, otherwise uses where the command is invoked";
-        _databasePreferenceOption.Description = "Predefines a database to migrate if available in the project references, the name must be defined as the package name. (ex. CSM.Security.Database)";
 
-        Add(_onlineOption);
-        Add(_projectPathOption);
-        Add(_databasePreferenceOption);
+        Add(new OnlineOption());
+        Add(new DatabaseOption());
+        Add(new ProjectPathOption());
 
-        SetAction(OnAction);
+        Add(new MigrateDatabaseCommand());
     }
-
-    /// <summary>
-    ///     Executes when the command is invoked.
-    /// </summary>
-    /// <param name="context">
-    ///     Command line execution context.
-    /// </param>
-    /// <exception cref="SystemError"></exception>
-    void OnAction(ParseResult context) {
-        bool isSrcOnline = context.GetValue(_onlineOption);
-        string? preferedDatabase = context.GetValue(_databasePreferenceOption);
-
-        // --> Detecting databases
-        CSharpProjectPackageInfo[] dbPackages = [];
-        AnsiConsole.Status().Spinner(
-                Spinner.Known.Aesthetic
-            )
-            .Start(
-                "Detecting business databases",
-                ctx => {
-
-                    if (isSrcOnline) {
-                        throw new SystemError("Currently online source dbPackage are not supported.");
-                    } else {
-                        dbPackages = GetOfflineDatabases(context, ctx);
-                    }
-
-                    if (dbPackages.Length == 0)
-                        throw new SystemError("No CSM databases found");
-                }
-            );
-
-        /// --> Selecting database to migrate.
-        CSharpProjectPackageInfo choosenDb;
-        if (string.IsNullOrWhiteSpace(preferedDatabase)) {
-            choosenDb = AnsiConsole.Prompt(
-                new SelectionPrompt<CSharpProjectPackageInfo>()
-                    .Title("Choose your [green]Database[/]: ")
-                    .PageSize(10)
-                    .AddChoices(dbPackages)
-                    .UseConverter(
-                        dbPackage => $"{dbPackage.Name} ([green]{dbPackage.Version}[/])"
-                    )
-                    .HighlightStyle(
-                        new Style(
-                                foreground: Color.MediumPurple,
-                                decoration: Decoration.Underline
-                            )
-                    )
-            );
-        } else {
-            choosenDb = dbPackages.FirstOrDefault(
-                    dbPackage => dbPackage.Name.Equals(preferedDatabase?.ToLower(), StringComparison.CurrentCultureIgnoreCase)
-                )
-                ?? throw new SystemError($"Prefered database ({preferedDatabase}) is not referenced in project");
-        }
-
-        /// Load the assembly and get the DbContext class to migrate.
-        DbContext databaseContext = choosenDb.GetContext();
-
-        IEnumerable<string> pendingMigrations = [];
-        AnsiConsole.Status().Spinner(
-                Spinner.Known.Aesthetic
-            )
-            .Start(
-                "Updating local database migrations",
-                statusCtx => {
-
-                    pendingMigrations = databaseContext.Database.GetPendingMigrations();
-                    if (pendingMigrations.Any())
-                        databaseContext.Database.Migrate();
-                }
-            );
-
-
-        ConsoleUtils.Success(
-                $"Database migrated",
-                new Dictionary<string, object?> {
-                    { "Is Online", isSrcOnline },
-                    { "Database Package", choosenDb.Name },
-                    { "Database Signature", ((IDatabase)databaseContext).Sign },
-                    {
-                        $"Pending Migrations ({pendingMigrations.Count()})",
-                        string.Join(", ", pendingMigrations)
-                    },
-                }
-            );
-    }
-
-    /// <summary>
-    ///     Gets the referenced database packages on offline mode.
-    /// </summary>
-    /// <param name="context">
-    ///     Command line execution context.
-    /// </param>
-    /// <param name="progressCtx">
-    ///     Console progress indicator status context.
-    /// </param>
-    /// <returns>
-    ///     Database packages refereces found.
-    /// </returns>
-    /// <exception cref="SystemError"></exception>
-    CSharpProjectPackageInfo[] GetOfflineDatabases(ParseResult context, StatusContext progressCtx) {
-        string cwd = context.GetValue<string>(_projectPathOption) ?? Environment.CurrentDirectory;
-
-        string csproj = Directory.GetFiles(cwd, "*.csproj")?.FirstOrDefault()
-            ?? throw new SystemError("No C# project found in this directory.");
-
-        XDocument doc = XDocument.Load(csproj);
-        string targetFramework = doc.Descendants("TargetFramework").First().Value;
-
-        List<CSharpProjectPackageInfo> packages = [
-            ..doc
-                .Descendants("PackageReference")
-                .Select(
-                    x => new CSharpProjectPackageInfo {
-                        Path = cwd,
-                        IsOnline = false,
-                        FrameworkVersion = targetFramework,
-                        Name = x.Attribute("Include")?.Value ?? "",
-                        Version = x.Attribute("Version")?.Value ?? "",
-                    }
-                )
-                .Where(
-                    package => {
-                        if (string.IsNullOrWhiteSpace(package.Name))
-                            return false;
-
-                        string lowerName = package.Name.ToLower();
-
-                        return DatabaseNamesRegEx().IsMatch(lowerName);
-                    }
-                )
-                .DistinctBy(
-                    dbPackage => dbPackage.Name
-                )
-            ];
-
-        progressCtx.Status("Building project assemblies");
-
-        // --> now we build the project to get the correct dependency assembly on local.
-        var psi = new ProcessStartInfo {
-            FileName = "dotnet",
-            Arguments = $"build \"{csproj}\"",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        using Process? process = Process.Start(psi);
-
-        process?.WaitForExit();
-        string? output = process?.StandardOutput.ReadToEnd();
-        string? error = process?.StandardError.ReadToEnd();
-
-        if (!string.IsNullOrWhiteSpace(error))
-            throw new SystemError(error);
-
-        return [.. packages];
-    }
-
-    /// NOT IMPLEMENTED YET
-    static string[] GetOnlineDatabases() {
-        throw new NotImplementedException("Online database loading not implemented yet");
-    }
-
-    /// <summary>
-    ///     Regex rule for database packages namings.
-    /// </summary>
-    /// <returns></returns>
-    [GeneratedRegex(@"^csm\.(?!database)[^.]+\.database(\..+)?$")]
-    private static partial Regex DatabaseNamesRegEx();
 }

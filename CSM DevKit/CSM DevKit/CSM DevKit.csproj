@@ -20,10 +20,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CSM.Database.Core" Version="7.0.0" />
-    <PackageReference Include="CSM.Foundation.Core" Version="4.0.0" />
+    <PackageReference Include="CSharp.Database.Extension" Version="1.0.0" />
+    <PackageReference Include="CSharp.Extension" Version="1.2.5" />
     <PackageReference Include="Spectre.Console" Version="0.57.2" />
-    <PackageReference Include="System.CommandLine" Version="2.0.10" />
+    <PackageReference Include="System.CommandLine" Version="2.0.14" />
   </ItemGroup>
 
 	<ItemGroup>

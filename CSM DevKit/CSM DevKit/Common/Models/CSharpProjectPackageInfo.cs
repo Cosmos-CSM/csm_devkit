@@ -1,9 +1,9 @@
 ﻿using System.Reflection;
 using System.Text.Json;
 
-using CSM_Database_Core.Abstractions.Interfaces;
+using CSharp_Database_Extension.Abstractions.Interfaces;
 
-using CSM_Foundation_Core.Core.Errors;
+using CSharp_Extension.Errors;
 
 using Microsoft.EntityFrameworkCore;
 

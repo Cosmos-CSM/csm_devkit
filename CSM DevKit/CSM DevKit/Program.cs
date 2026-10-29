@@ -1,9 +1,9 @@
 ﻿
 using System.CommandLine;
 
-using CSM_DevKit.Commands;
+using CSharp_Extension.Common.Utils;
 
-using CSM_Foundation_Core.Core.Utils;
+using CSM_DevKit.Commands;
 
 internal class Program {
     private static int Main(string[] args) {
