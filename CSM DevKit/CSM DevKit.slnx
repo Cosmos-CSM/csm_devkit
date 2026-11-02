@@ -1,4 +1,6 @@
 <Solution>
   <Project Path="CSM DevKit/CSM DevKit.csproj" />
+  <Project Path="DatabaseReference.PostgresSQL/DatabaseReference.PostgresSQL.csproj" />
+  <Project Path="DatabaseReference/DatabaseReference.csproj" Id="0bf7fc63-0f59-4e49-8153-29f3d4fa6f90" />
   <Project Path="ReferenceProject/ReferenceProject.csproj" Id="3719ddf7-e1b4-4fb9-a807-bc66161043e2" />
 </Solution>
