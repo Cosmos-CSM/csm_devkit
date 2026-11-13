@@ -7,12 +7,14 @@ using CSharp_Database_Extension.Common.Enums;
 
 using CSharp_Extension.Common.Utils;
 using CSharp_Extension.Errors;
-using CSharp_Extension.Errors.Abstractions.Interfaces;
 
+using CSM_DevKit.Common;
 using CSM_DevKit.Common.Models;
 using CSM_DevKit.Common.Spectre.Columns;
-using CSM_DevKit.Common.Utils;
+using CSM_DevKit.Common.Utils.Abstractions;
 using CSM_DevKit.Options;
+
+using CSharpMigrationFT = CSM_DevKit.Common.Constants.FileTemplates.CSharpMigrationDesigner;
 
 using Spectre.Console;
 
@@ -45,16 +47,38 @@ public class MigrateDatabaseCommand : Command {
 
 
     /// <summary>
+    ///     Command generic utils dependency.
+    /// </summary>
+    readonly ICommandUtils _cmdUtils;
+
+    /// <summary>
     ///     Dependency that handles [.Net] command invokations.
     /// </summary>
-    readonly DotnetCommandUtils DotNetCommandUtils = new();
+    readonly IDotnetCommandUtils _dotnetCmdUtils;
 
-    /// Creates a new instancee.
-    public MigrateDatabaseCommand()
-        : base(
-                "migrate",
-                "Generates EntityFramework migration scripts"
-            ) {
+    /// <summary>
+    ///     Dependency that handles file templates access.
+    /// </summary>
+    readonly IFileTemplatesUtils _fileTemplateUtils;
+
+    /// <summary>
+    ///     Creates a new instancee.
+    /// </summary>
+    /// <param name="cmdUtils">
+    ///     Command generic utils dependency.
+    /// </param>
+    public MigrateDatabaseCommand(
+        ICommandUtils cmdUtils,
+        IDotnetCommandUtils dotnetCmdUtils,
+        IFileTemplatesUtils fileTemplateUtils
+    )
+    : base(
+        "migrate",
+        "Generates EntityFramework migration scripts"
+    ) {
+        _cmdUtils = cmdUtils;
+        _dotnetCmdUtils = dotnetCmdUtils;
+        _fileTemplateUtils = fileTemplateUtils;
 
         Add(AutoSelectOption);
         Add(SelectAllOption);
@@ -64,51 +88,73 @@ public class MigrateDatabaseCommand : Command {
         SetAction(OnAction);
     }
 
+    /// <summary>
+    ///     Action executed on command requested.
+    ///     
+    ///     <list type="number">
+    ///         <item>
+    ///             Determinates the solution to migrate working directory. 
+    ///         </item>    
+    ///         <item>
+    ///             Determinates the available database projects to generate database-provider scoped migrations. 
+    ///         </item>
+    ///         <item>
+    ///             Generates migrations assemblies for selected/determinated database projects
+    ///         </item>
+    ///     </list>
+    /// </summary>  
+    /// <param name="parseResult"></param>
     public void OnAction(ParseResult parseResult) {
+        Progress progressView = AnsiConsole.Progress();
+        progressView.AutoClear(true);
+        progressView.Columns(
+                new TaskDescriptionColumn(),
+                new ProgressBarColumn(),
+                new SpinnerColumn(),
+                new CustomElapsedTimeColumn()
+            );
 
-        try {
-            Progress progressView = AnsiConsole.Progress();
-            progressView.AutoClear(true);
-            progressView.Columns(
-                    new TaskDescriptionColumn(),
-                    new ProgressBarColumn(),
-                    new SpinnerColumn(),
-                    new CustomElapsedTimeColumn()
-                );
+        string solutionDir = "";
+        List<DatabaseProjectMetadata> databaseProjects = [];
+        progressView.Start(
+                (progressContext) => {
 
-            string solutionDir = "";
-            List<DatabaseProjectMetadata> databaseProjects = [];
-            progressView.Start(
-                    (progressContext) => {
+                    // Step 1 - Determine working directory metadata.
+                    string? startWorkingDir = parseResult.GetValue(DatabaseCommand.WorkingDirectoryOption);
+                    (string workingDir, bool? isSolutionDir) = _cmdUtils.DeterminateWorkingDirectoryType(startWorkingDir, true);
 
-                        // Step 1 - Determine working directory metadata.
-                        (string workingDir, bool isSolutionDir) = DetermineWorkingDirectoryMetadata(progressContext, parseResult);
+                    // Step 2 - Get generation context.
+                    (solutionDir, databaseProjects) = GetDatabaseProjects(progressContext, workingDir, isSolutionDir ?? false);
+                }
+            );
 
-                        // Step 2 - Get generation context.
-                        (solutionDir, databaseProjects) = GetDatabaseProjects(progressContext, workingDir, isSolutionDir);
-                    }
-                );
-
-            // Step 3 - Determinate databases to migrate and migrate them.
-            (List<DatabaseProjectMetadata> Databases, List<string> migrations) = MigrateDatabases(parseResult, solutionDir, databaseProjects);
-            ConsoleUtils.Announce(
-                    $"Succesful migrations",
-                    new Dictionary<string, object?> {
+        // Step 3 - Determinate databases to migrate and migrate them.
+        (List<DatabaseProjectMetadata> Databases, List<string> migrations) = MigrateDatabases(parseResult, solutionDir, databaseProjects);
+        ConsoleUtils.Announce(
+                $"Succesful migrations",
+                new Dictionary<string, object?> {
                         { "Databases", string.Join(", ", Databases.Select(prj => prj.Name)) },
                         { "Migrations", string.Join(", ", migrations) }
-                    }
-                );
-        } catch (AggregateException ex) {
-            foreach (Exception inner in ex.Flatten().InnerExceptions) {
-                if (inner is IError error) {
-                    ConsoleUtils.Exception(error);
-                } else {
-                    throw;
                 }
-            }
-        }
+            );
     }
 
+    /// <summary>
+    ///     Executes the Migrations process for given <paramref name="databaseProjects"/>, generating Migrations assemblies, comfigurations and context.
+    /// </summary>
+    /// <param name="parseResult">
+    ///     CMD Context.
+    /// </param>
+    /// <param name="solutionDir">
+    ///     Working solution directory.
+    /// </param>
+    /// <param name="databaseProjects">
+    ///     Database projects to migrate
+    /// </param>
+    /// <returns>
+    ///     Migrated database projects; Generated migrations paths.
+    /// </returns>
+    /// <exception cref="SystemError"></exception>
     (List<DatabaseProjectMetadata> Databases, List<string> Migrations) MigrateDatabases(ParseResult parseResult, string solutionDir, List<DatabaseProjectMetadata> databaseProjects) {
         bool autoSelect = parseResult.GetValue(AutoSelectOption);
         bool selectAll = parseResult.GetValue(SelectAllOption);
@@ -195,7 +241,7 @@ public class MigrateDatabaseCommand : Command {
                                         // Provider migrations project doesn´t exist, we create one.
                                         if (projFile == null) {
                                             statusContext.Status($"Creating migration project for {provider}");
-                                            DotNetCommandUtils.CreateProject(migrationName, solutionDir);
+                                            _dotnetCmdUtils.CreateProject(migrationName, solutionDir);
                                             projFile = solutionDirInfo.GetFiles($"{migrationName}.csproj", SearchOption.AllDirectories).FirstOrDefault();
                                         }
 
@@ -212,13 +258,13 @@ public class MigrateDatabaseCommand : Command {
                                         statusContext.Status($"Referencing database context project");
                                         string slnDbPrjRelative = Path.GetRelativePath(solutionDir, $"{toMigrateProject.Location}{Path.DirectorySeparatorChar}{toMigrateProject.Name}.csproj");
 
-                                        SystemCommandOutput databaseReferenceOutput = DotNetCommandUtils.Reference(migrationName, slnDbPrjRelative, solutionDir); // Referencing database context.
+                                        SystemCommandOutput databaseReferenceOutput = _dotnetCmdUtils.Reference(migrationName, slnDbPrjRelative, solutionDir); // Referencing database context.
                                         if (databaseReferenceOutput.ExitCode != 0) {
                                             throw new SystemError(databaseReferenceOutput.Error);
                                         }
 
                                         statusContext.Status($"Referencing EF Design package");
-                                        DotNetCommandUtils.Reference(
+                                        _dotnetCmdUtils.Reference(
                                                 migrationName,
                                                 "Microsoft.EntityFrameworkCore.Design",
                                                 solutionDir,
@@ -233,7 +279,7 @@ public class MigrateDatabaseCommand : Command {
                                         };
 
                                         statusContext.Status($"Referencing EF Provider Scoped package");
-                                        DotNetCommandUtils.Reference(
+                                        _dotnetCmdUtils.Reference(
                                                 migrationName,
                                                 providerPackage,
                                                 solutionDir,
@@ -241,7 +287,7 @@ public class MigrateDatabaseCommand : Command {
                                             ); // Referencing EF Provider package.
 
                                         statusContext.Status($"Referencing CSharp Extension Database package");
-                                        DotNetCommandUtils.Reference(
+                                        _dotnetCmdUtils.Reference(
                                                 migrationName,
                                                 "CSharp.Database.Extension",
                                                 solutionDir,
@@ -266,38 +312,24 @@ public class MigrateDatabaseCommand : Command {
                                                     }
                                                 ),
                                         };
-                                        await File.WriteAllTextAsync(
-                                                factoryFilePath,
-                                                $$"""
-                                                        using Microsoft.EntityFrameworkCore.Design;
-                                                        using CSharp_Database_Extension.Common.Enums;
-                                                        using CSharp_Database_Extension.Common.Models;
-
-                                                        namespace {{migrationName}};
-
-                                                        /// Auto-Generated file by CSM DevKit auto migrations generation per provider ({{DateTime.UtcNow}})[UTC]. 
-
-                                                        public sealed class DesignTimeDbContextFactory
-                                                            : IDesignTimeDbContextFactory<{{toMigrateProject.DatabaseContext.Name}}>
-                                                        {
-                                                            public {{toMigrateProject.DatabaseContext.Name}} CreateDbContext(string[] args)
-                                                            {
-                                                                DatabaseOptions<{{toMigrateProject.DatabaseContext.Name}}> options = new() {
-                                                                    Provider = {{nameof(DatabaseProviders)}}.{{provider}},
-                                                                    Migrations = GetType().Assembly
-                                                                };
-
-                                                                return new {{toMigrateProject.DatabaseContext.Name}}(options);
-                                                            }
-                                                        }
-                                                        """
-                                            );
+                                        
+                                        string fileTemplate = _fileTemplateUtils.Get(CSharpMigrationFT.FileName);
+                                        Dictionary<string, string> replesTokens = new() {
+                                            { CSharpMigrationFT.NamespaceToken, migrationName },
+                                            { CSharpMigrationFT.DateToken, DateTime.UtcNow.ToString() },
+                                            { CSharpMigrationFT.DatabaseContextToken, toMigrateProject.DatabaseContext.Name },
+                                            { CSharpMigrationFT.DatabaseProviderToken, $"{nameof(DatabaseProviders)}.{provider}" }
+                                        };
+                                        foreach(KeyValuePair<string, string> replaceToken in replesTokens) {
+                                            fileTemplate = fileTemplate.Replace($"{{{replaceToken.Key}}}", replaceToken.Value);
+                                        }
+                                        await File.WriteAllTextAsync(factoryFilePath, fileTemplate);
 
                                         statusContext.Status("Restoring solution after generation");
-                                        DotNetCommandUtils.Restore(solutionDir);
+                                        _dotnetCmdUtils.Restore(solutionDir);
 
                                         statusContext.Status($"Generating EF Migration");
-                                        SystemCommandOutput commandOutput = DotNetCommandUtils.EntityFrameworkMigrate(
+                                        SystemCommandOutput commandOutput = _dotnetCmdUtils.EntityFrameworkMigrate(
                                                 solutionDir,
                                                 comment,
                                                 Path.GetRelativePath(
@@ -308,7 +340,7 @@ public class MigrateDatabaseCommand : Command {
 
                                         if (commandOutput.ExitCode != 0) {
                                             throw new SystemError(
-                                                    $"{commandOutput.Error}",
+                                                    $"Entity Framework Migrate error",
                                                     data: new Dictionary<string, object?> {
                                                         { "Output", commandOutput.Output },
                                                         { "ExitCode", commandOutput.ExitCode }
@@ -375,7 +407,7 @@ public class MigrateDatabaseCommand : Command {
         task.Increment(1);
         task.Description = "Building solution assemblies";
 
-        DotNetCommandUtils.Build(solutionDir);
+        _dotnetCmdUtils.Build(solutionDir);
 
         // Getting dll assemblies that are from databases.
         task.Increment(1);
@@ -448,51 +480,5 @@ public class MigrateDatabaseCommand : Command {
 
         task.Increment(1);
         return (solutionDir, dbProjsMetadatas);
-    }
-
-    /// <summary>
-    ///     Step 1. Determinate if the command working directory is a solution or project hosting directory.
-    /// </summary>
-    /// <returns>
-    ///     Working directory absolute path, whether it is a solution or project hosting directory.
-    /// </returns>
-    static (string workingDirectory, bool isSolutionDirectory) DetermineWorkingDirectoryMetadata(ProgressContext progressContext, ParseResult parseResult) {
-        ProgressTask task = progressContext.AddTask(
-                            "Determinating working directory",
-                            maxValue: 2
-                        );
-
-        bool? isSolutionDirectory = null;
-        string workingDirectory = parseResult.GetValue(DatabaseCommand.WorkingDirectoryOption)
-            ?? Environment.CurrentDirectory;
-
-        if (!Path.IsPathFullyQualified(workingDirectory)) {
-            workingDirectory = Path.GetFullPath(workingDirectory, Environment.CurrentDirectory);
-        }
-        task.Increment(1);
-
-        string[] workingDirectoryFiles = Directory.GetFiles(workingDirectory, "*", SearchOption.TopDirectoryOnly);
-        foreach (string wdFile in workingDirectoryFiles) {
-            if (
-                wdFile.EndsWith(".sln", StringComparison.OrdinalIgnoreCase)
-                || wdFile.EndsWith(".sln", StringComparison.OrdinalIgnoreCase) // --> Support for .Net 9 new format
-            ) {
-                isSolutionDirectory = true;
-                break;
-            }
-
-            if (wdFile.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)) {
-                isSolutionDirectory = false;
-                break;
-            }
-        }
-
-        if (isSolutionDirectory == null) {
-            throw new SystemError("Working directory doesn't contain a valid solution neither project file");
-        }
-
-
-        task.Increment(1);
-        return (workingDirectory, isSolutionDirectory ?? false);
     }
 }

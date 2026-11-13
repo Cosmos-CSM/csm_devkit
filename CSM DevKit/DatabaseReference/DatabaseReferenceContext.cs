@@ -7,6 +7,10 @@ public class DatabaseReferenceContext : DatabaseBase<DatabaseReferenceContext> {
 
     public override string Signature => "DBREF";
 
+    public DatabaseReferenceContext() {
+
+    }
+
     public DatabaseReferenceContext(DatabaseOptions<DatabaseReferenceContext> databaseOptions)
         : base(databaseOptions){
 

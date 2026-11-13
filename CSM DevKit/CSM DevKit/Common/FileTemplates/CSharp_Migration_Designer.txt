@@ -1,0 +1,23 @@
+﻿using CSharp_Database_Extension.Abstractions.Bases;
+using CSharp_Database_Extension.Common.Enums;
+using CSharp_Database_Extension.Common.Models;
+
+namespace {NAMESPACE_TOKEN};
+
+/// Auto-Generated file by CSM DevKit auto migrations generation per provider ({DATE_TOKEN})[UTC]. 
+
+public sealed class DesignTimeDbContextFactory
+    : DatabaseDesignerBase<{DB_CTX_TOKEN}> {
+
+    public DesignTimeDbContextFactory() {
+    }
+
+    override public {DB_CTX_TOKEN} CreateDbContext(string[] args) {
+        DatabaseOptions<{DB_CTX_TOKEN}> options = new() {
+            Provider = {DB_PROVIDER_TOKEN},
+            Migrations = GetType().Assembly
+        };
+
+        return new {DB_CTX_TOKEN}(options);
+    }
+}

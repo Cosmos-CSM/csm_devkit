@@ -27,17 +27,21 @@ public partial class DatabaseCommand : Command {
     /// <summary>
     ///     Creates a new instancee
     /// </summary>
-    public DatabaseCommand()
+    /// <param name="subCommands">
+    ///     Inner sub commands.
+    /// </param>
+    public DatabaseCommand(params Command[] subCommands)
         : base(
             "db",
             "Database update related commands"
         ) {
 
-
         Add(OnlineOption);
         Add(DatabaseOption);
         Add(WorkingDirectoryOption);
 
-        Add(new MigrateDatabaseCommand());
+        foreach (Command subCommand in subCommands) {
+            Add(subCommand);
+        }
     }
 }

@@ -20,6 +20,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Common\FileTemplates\CSharp_Migration_Designer.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CSharp.Database.Extension" Version="1.0.1" />
     <PackageReference Include="CSharp.Extension" Version="1.2.5" />
     <PackageReference Include="Spectre.Console" Version="0.57.2" />
