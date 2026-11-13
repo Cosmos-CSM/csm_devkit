@@ -1,6 +1,8 @@
 ﻿using System.CommandLine;
 using System.Reflection;
 
+using CSharp_Database_Extension.Abstractions.Bases;
+
 using CSM_DevKit.Common.Utils.Abstractions;
 
 using Microsoft.IdentityModel.Tokens;
@@ -77,7 +79,15 @@ public class SyncDatabaseCommand : Command {
                             continue;
 
                         string projectDllPath = projectDlls.First();
-                        Assembly loadingAssembly = Assembly.LoadFrom(projectDllPath);
+                        Assembly projectAssembly = Assembly.LoadFrom(projectDllPath);
+
+                        IEnumerable<Type> designerTypes = projectAssembly.GetTypes().Where(
+                                type => type.IsAssignableTo(typeof(DatabaseDesignerBase<>))
+                            );
+
+                        if(designerTypes.IsNullOrEmpty()) {
+                            continue;
+                        }
                     }
                 }
             );

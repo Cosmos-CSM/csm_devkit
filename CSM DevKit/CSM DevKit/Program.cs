@@ -17,14 +17,19 @@ internal class Program {
 
         try {
             MigrateDatabaseCommand migrateDatabaseCommand = new(cmdUtils, dotnetCmdUtils, fileTemplateUtils);
+            SyncDatabaseCommand syncDatabaseCommand = new(cmdUtils, dotnetCmdUtils);
 
-            DatabaseCommand databaseCommand = new(migrateDatabaseCommand);
+            DatabaseCommand databaseCommand = new(migrateDatabaseCommand, syncDatabaseCommand);
 
             RootCommand rootCommand = new("Provides utilities methods for CSM developers and maintainers") {
                 Subcommands = {
                     databaseCommand,
                 },
-
+                Aliases = {
+                    "csm",
+                    "cdk",
+                    "dk"
+                },
             };
 
             return rootCommand
